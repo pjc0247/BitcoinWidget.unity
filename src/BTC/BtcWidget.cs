@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,8 +9,14 @@ using UnityEditor;
 public class BtcWidget : MonoBehaviour
 {
     [InitializeOnLoadMethod]
-    static void AA() 
+    static void InjectWidget() 
     {
+        EditorApplication.update += OnDefferedCreation;
+    }
+    static void OnDefferedCreation()
+    {
+        EditorApplication.update -= OnDefferedCreation;
+
         var widget = FindObjectOfType<BtcWidget>();
         if (widget == null)
         {
@@ -22,18 +28,18 @@ public class BtcWidget : MonoBehaviour
 #if UNITY_EDITOR
     private DateTime lastDraw;
 
-    private Texture2D btc;
+    private Texture2D btc, eth, xrp;
 
-    private float priceUsd;
+    private float btcUsd, ethUsd, xrpUsd;
 
-    private void DrawString(string text, Color? colour = null, bool showTexture = true, int offsetY = 0)
+    private void DrawString()
     {
         Handles.BeginGUI();
 
         var restoreColor = GUI.color;
         var viewSize = SceneView.currentDrawingSceneView.position;
 
-        if (colour.HasValue) GUI.color = colour.Value;
+        GUI.color = Color.white;
         var view = SceneView.currentDrawingSceneView;
         Vector3 screenPos = view.camera.WorldToScreenPoint(
             view.camera.transform.position + view.camera.transform.forward);
@@ -45,40 +51,61 @@ public class BtcWidget : MonoBehaviour
             return;
         }
         var style = new GUIStyle(GUI.skin.label);
-        style.alignment = TextAnchor.MiddleCenter;
-        style.fontSize = 40;
-        Vector2 size = style.CalcSize(new GUIContent(text));
-        GUI.Label(new Rect(40, viewSize.height - 100 - offsetY, size.x, size.y), text, style);
+        style.alignment = TextAnchor.MiddleLeft;
+        style.fontSize = 30;
+        Vector2 size = style.CalcSize(new GUIContent("BTC/USD: $" + btcUsd.ToString("#")));
+        GUI.Label(new Rect(80, viewSize.height - 100 - 0, size.x, size.y),
+            "BTC/USD: $" + btcUsd.ToString("#") + "" , style);
+        GUI.Label(new Rect(80, viewSize.height - 100 - 40, size.x, size.y),
+            "ETH/USD: $" + ethUsd.ToString("#") + "" , style);
+        GUI.Label(new Rect(80, viewSize.height - 100 - 80, size.x, size.y),
+            "XRP/USD: $" + xrpUsd.ToString("0.##") + "" , style);
         GUI.color = restoreColor;
 
-        if (showTexture)
-        {
-            GUI.DrawTexture(
-                new Rect(40, viewSize.height - 210, 100, 100), btc,
+        // DRAW ICONS
+        GUI.DrawTexture(
+                new Rect(35, viewSize.height - 100, 35, 35), btc,
                 ScaleMode.StretchToFill, true, 1.0f, new Color(1, 1, 1, 0.5f), 0, 0);
-        }
+        GUI.DrawTexture(
+            new Rect(35, viewSize.height - 140, 35, 35), eth,
+            ScaleMode.StretchToFill, true, 1.0f, new Color(1, 1, 1, 0.5f), 0, 0);
+        GUI.DrawTexture(
+            new Rect(35, viewSize.height - 180, 35, 35), xrp,
+            ScaleMode.StretchToFill, true, 1.0f, new Color(1, 1, 1, 0.5f), 0, 0);
 
         Handles.EndGUI();
     }
     void LoadTexture()
     {
         btc = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/BTC/btc.png");
+        eth = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/BTC/eth.png");
+        xrp = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/BTC/xrp.png");
     }
     void RefreshRate()
     {
-        var www = new WWW("https://api.coinmarketcap.com/v1/ticker/bitcoin/");
+        var www = new WWW("https://api.coinmarketcap.com/v1/ticker/");
         while (www.isDone == false) ;
         if (string.IsNullOrEmpty(www.error) == false)
             return;
 
         var data = MiniJSON.Json.Deserialize(www.text);
-        var btcRateInfo = (Dictionary<string, object>)((List<object>)data)[0];
+        var ticks = (List<object>)data;
 
-        priceUsd = float.Parse((string)btcRateInfo["price_usd"]);
+        foreach (var _c in ticks)
+        {
+            var c = (Dictionary<string, object>)_c;
+
+            if ((string)c["symbol"] == "BTC")
+                btcUsd = float.Parse((string)c["price_usd"]);
+            else if ((string)c["symbol"] == "ETH")
+                ethUsd = float.Parse((string)c["price_usd"]);
+            else if ((string)c["symbol"] == "XRP")
+                xrpUsd = float.Parse((string)c["price_usd"]);
+        }
     }
     void OnDrawGizmos()
     {
-        if (btc == null)
+        if (btc == null || eth == null || xrp == null)
             LoadTexture();
 
         if ((DateTime.Now - lastDraw) >= TimeSpan.FromSeconds(1))
@@ -87,7 +114,7 @@ public class BtcWidget : MonoBehaviour
             lastDraw = DateTime.Now;
         }
 
-        DrawString("BTC/USD: " + priceUsd.ToString() + "USD");
+        DrawString();
     }
 #endif
 }
